@@ -3,12 +3,15 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 import numpy as np
 import random
+from collections import defaultdict
 
 class SocialNetowrk():
     def __init__(self, n=100, k=1):
         self.n=n
         self.k=k
+        self.t = 0
         self.pops = [0]*4
+        self.populations_history = []
         Insample = nx.barabasi_albert_graph(n, k)        
         InAmatrix = self.weight_Amatrix_Poisson(np.triu(nx.to_numpy_array(Insample)))
         
@@ -25,14 +28,14 @@ class SocialNetowrk():
         
         self.layout = nx.spring_layout(self.G,seed=10)
 
-        self.fig, self.axs = plt.subplots(3, figsize=(5,12))
+        self.fig, self.axs = plt.subplots(2,2, figsize=(12,12))
         self.node_artists = nx.draw_networkx_nodes(
             self.G,
             pos=self.layout,
-            ax=self.axs[0],
+            ax=self.axs[0][0],
             node_size=35
         )
-        nx.draw_networkx_edges(self.G, pos=self.layout, ax=self.axs[0], node_size=35)
+        nx.draw_networkx_edges(self.G, pos=self.layout, ax=self.axs[0][0], node_size=35)
 
     def weight_Amatrix_Poisson(self,Amatrix):
             for i,node in enumerate(Amatrix):
@@ -51,7 +54,7 @@ class SocialNetowrk():
     
     def show(self, fname):
         state_to_color = {
-            0: "gray",
+            0: "slateblue",
             1: "orange",
             2: "green",
             3: "brown",
@@ -62,7 +65,7 @@ class SocialNetowrk():
         ]
         self.node_artists.set_color(new_colors)
 
-        ax1 = self.axs[1]
+        ax1 = self.axs[0][1]
         ax1.cla()
 
         degree_dist = nx.degree_histogram(self.G)
@@ -79,7 +82,7 @@ class SocialNetowrk():
                 ax1.plot(
                     domain, codomain,
                     label=f"state {i}",
-                    color=["gray", "orange", "green", "brown"][i]
+                    color=["slateblue", "orange", "green", "brown"][i]
                 )
 
         ax1.set_title("degree distribution")
@@ -88,20 +91,31 @@ class SocialNetowrk():
         ax1.grid(True)
         ax1.legend()
 
-        ax2 = self.axs[2]
-        ax2.cla()
-        ax2.bar(
-            [0, 1, 2, 3],
-            self.pops,
-            color=["gray", "orange", "green", "brown"],
-        )
-        ax2.set_title("population by state")
+        populations = np.transpose(self.populations_history)
 
-        ax0 = self.axs[0]
+        ax2 = self.axs[1][0]
+        ax2.cla()
+        if self.t > 0:
+            ax2.plot(list(range(self.t)), populations[0], color="slateblue")
+            ax2.plot(list(range(self.t)), populations[1], color="orange")
+            ax2.plot(list(range(self.t)), populations[2], color="green")
+            ax2.plot(list(range(self.t)), populations[3], color="brown")
+            ax2.set_title("Population By State vs. Time")
+            ax2.grid(True)
+
+        ax3 = self.axs[1][1]
+        ax3.cla()
+        if self.t > 1:
+            ax3.set_title("Infected Gopulation Growth vs. Time")
+            gradient = np.gradient(populations[1])
+            ax3.grid(True)
+            plt.plot(list(range(self.t)), gradient, color="orange")
+
+        ax0 = self.axs[0][0]
         ax0.collections[-1].set_color(new_colors)  # update nodes
         ax0.legend(
             handles=[
-                mpatches.Patch(color="gray", label="Healthy (0)"),
+                mpatches.Patch(color="slateblue", label="Healthy (0)"),
                 mpatches.Patch(color="orange", label="Infected (1)"),
                 mpatches.Patch(color="green", label="Zombie (2)"),
                 mpatches.Patch(color="brown", label="Dead (3)")
@@ -122,13 +136,18 @@ class SocialNetowrk():
         plt.show()
 
 class ZombieApocolypse(SocialNetowrk):
-    def __init__(self,initial_infected_num=1,n=100,k=1):
+
+    def __init__(self,initial_infected_num=1,n=100,k=1, vaccinate_rate=6, vaccine_effectivness=5, vaccine_supply=0.3, sample_size=0.4):
         super().__init__(n,k)
         initial_infected = random.sample(range(self.n), initial_infected_num)
+        self.vaccinate_rate=vaccinate_rate
+        self.vaccine_effectiveness = vaccine_effectivness
+        self.vaccine_supply = vaccine_supply
+        self.sample_size = sample_size
 
         for node in initial_infected:
             self.G.nodes[node]["state"] = 1
-            self.G.nodes[node]["ttl"] = max(1, int(np.random.exponential(100)))
+            self.G.nodes[node]["ttl"] = max(1, int(np.random.exponential(10)))
     
     def populations(self):
         self.pops = [0]*4
@@ -145,13 +164,38 @@ class ZombieApocolypse(SocialNetowrk):
                 self.degree_distributions[node_state][degree] = 1
             else:
                 self.degree_distributions[node_state][degree] += 1
+        self.populations_history.append(self.pops)
 
     def show(self,fname):
         super().show(fname)
 
     def update_step(self):
+        self.populations()
         interaction_sequence = list(range(0,self.n))
         random.shuffle(interaction_sequence)
+        if self.t % self.vaccinate_rate == 0 and self.t > 0:
+            print(f"vaccinated at {self.t} stepts")
+            healthy_degree_distribution = self.degree_distributions[0]
+            healthy_size = sum(list(healthy_degree_distribution))
+            sample_size = int(healthy_size*(self.sample_size))
+            healthy_sample = list(healthy_degree_distribution)[1-sample_size:]
+            
+            nodes_by_degree = defaultdict(list)
+
+            for n, deg in self.G.degree():
+                if self.G.nodes[n]["state"] == 0:   # only healthy
+                    nodes_by_degree[deg].append(n)
+            
+            pop = []
+
+            for degree, count in enumerate(healthy_sample):
+                pop.extend(nodes_by_degree[degree][:count])
+
+            sample = random.sample(pop, int(len(pop)*self.vaccine_supply))
+
+            for node in sample:
+                self.G.nodes[node]["immunity"] += self.vaccine_effectiveness
+
         for id in interaction_sequence:
             node_state = self.G.nodes[id].get("state",0)
             if node_state == 3: # dead
@@ -185,19 +229,19 @@ class ZombieApocolypse(SocialNetowrk):
             choice = random.choices(population=valid_neighbors, weights=weights, k=1)[0]
             choice_state = self.G.nodes[choice].get("state",0)
 
-            if node_state == 0 and choice_state == 1:
+            if node_state == 0 and choice_state == 1 and self.G.nodes[id].get("immunity",0) == 0:
                 new_state = int(np.random.choice([0,1]))
                 self.G.nodes[id]["state"] = new_state
                 if new_state == 1:
                     self.G.nodes[id]["ttl"] = max(1, int(np.random.exponential(3)))
 
-            if node_state == 1 and choice_state == 0:
+            if node_state == 1 and choice_state == 0 and self.G.nodes[choice].get("immunity",0) == 0:
                 new_state = int(np.random.choice([0,1]))
                 self.G.nodes[choice]["state"] = new_state
                 if new_state == 1:
                     self.G.nodes[choice]["ttl"] = max(1, int(np.random.exponential(3)))
-                
-            if node_state == 2 and choice_state == 0:
+
+            if node_state == 2 and choice_state == 0 and self.G.nodes[choice].get("immunity",0) == 0:
                 neighbors_1 = set(self.G[id])
                 neighbors_2 = set()
                 for nbr in neighbors_1:
@@ -209,14 +253,12 @@ class ZombieApocolypse(SocialNetowrk):
                     if self.G.nodes[nbr].get("state", 0) == 0
                 ]
 
-                choice = random.choices(population=valid_neighbors, k=1)[0]
-                choice_state = self.G.nodes[choice].get("state",0)
-
                 self.G.nodes[choice]["state"] = 1
-                self.G.nodes[choice]["ttl"] = max(1, int(np.random.exponential(7)))
-
-        self.populations()
-
+                self.G.nodes[choice]["ttl"] = max(1, int(np.random.exponential(3)))
+            
+            current_immunity = self.G.nodes[id].get("immunity", 0)
+            self.G.nodes[id]["immunity"] = max(current_immunity - 1, 0)
+        self.t +=1
 import imageio.v2 as imageio
 from tqdm import tqdm
 
@@ -232,5 +274,5 @@ def make_gif(zombie_sim:ZombieApocolypse, steps=20, outfile="zombie.gif"):
     imageio.mimsave(outfile, frames, fps=10)
     print(f"Saved GIF → {outfile}")
 
-Z = ZombieApocolypse(n=100, k=2)
-make_gif(Z, steps=100)
+Z = ZombieApocolypse(n=150, k=2)
+make_gif(Z, steps=50)
