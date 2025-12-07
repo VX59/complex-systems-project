@@ -15,5 +15,5 @@ def make_gif(zombie_sim:ZombieApocolypse, steps=20, outfile="zombie.gif"):
     imageio.mimsave(outfile, frames, fps=10)
     print(f"Saved GIF → {outfile}")
 
-Z = ZombieApocolypse(n=150, k=2, vaccine_supply=0.35)
+Z = ZombieApocolypse(n=150, k=2, vaccine_supply=0.35, vaccinate_rate=5)
 make_gif(Z, steps=50)

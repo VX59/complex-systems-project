@@ -113,17 +113,16 @@ class SocialNetowrk():
             ax3.grid(True)
             plt.plot(list(range(self.t)), gradient, color="orange")
         
-        if self.t % 10 == 0:
-            ax0 = self.axs[0][0]
-            ax0.collections[-1].set_color(new_colors)  # update nodes
-            ax0.legend(
-                handles=[
-                    mpatches.Patch(color="slateblue", label="Healthy (0)"),
-                    mpatches.Patch(color="orange", label="Infected (1)"),
-                    mpatches.Patch(color="green", label="Zombie (2)"),
-                    mpatches.Patch(color="brown", label="Dead (3)")
-                ]
-            )
+        ax0 = self.axs[0][0]
+        ax0.collections[-1].set_color(new_colors)  # update nodes
+        ax0.legend(
+            handles=[
+                mpatches.Patch(color="slateblue", label="Healthy (0)"),
+                mpatches.Patch(color="orange", label="Infected (1)"),
+                mpatches.Patch(color="green", label="Zombie (2)"),
+                mpatches.Patch(color="brown", label="Dead (3)")
+            ]
+        )
 
         self.fig.suptitle(fname)
         self.fig.tight_layout()
@@ -234,13 +233,13 @@ class ZombieApocolypse(SocialNetowrk):
             choice_state = self.G.nodes[choice].get("state",0)
 
             if node_state == 0 and choice_state == 1 and self.G.nodes[id].get("immunity",0) == 0:
-                new_state = int(np.random.choice([0,1]))
+                new_state = int(np.random.choice([0,1],p=[0.8,0.2]))
                 self.G.nodes[id]["state"] = new_state
                 if new_state == 1:
                     self.G.nodes[id]["ttl"] = max(1, int(np.random.exponential(3)))
 
             if node_state == 1 and choice_state == 0 and self.G.nodes[choice].get("immunity",0) == 0:
-                new_state = int(np.random.choice([0,1]))
+                new_state = int(np.random.choice([0,1],p=[0.8,0.2]))
                 self.G.nodes[choice]["state"] = new_state
                 if new_state == 1:
                     self.G.nodes[choice]["ttl"] = max(1, int(np.random.exponential(3)))
